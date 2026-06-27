@@ -1,0 +1,54 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      retries: 12
+      start_period: 30s
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      REDIS_URL: redis://redis:6379
+      CHROMA_DIR: /app/data/chroma_db
+      DOCUMENTS_DIR: /app/documentos_soporte
+      LLM_MODEL: llama3.2
+      EMBED_MODEL: nomic-embed-text
+      LLM_NUM_CTX: "4096"
+    volumes:
+      - chroma_data:/app/data/chroma_db
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+  web:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+    depends_on:
+      - api
+
+volumes:
+  ollama_data:
+  chroma_data:
